@@ -23,7 +23,7 @@
 - name: Copier la configuration Nginx du domaine
   template:
     src: nginx.conf.j2
-    dest: "/etc/nginx/sites-available/{{ domain_name }}"
+    dest: "/etc/nginx/sites-available/todo-app"
     owner: root
     group: root
     mode: "0644"
@@ -31,8 +31,8 @@
 
 - name: Activer le site Nginx (symlink)
   file:
-    src: "/etc/nginx/sites-available/{{ domain_name }}"
-    dest: "/etc/nginx/sites-enabled/{{ domain_name }}"
+    src: "/etc/nginx/sites-available/todo-app"
+    dest: "/etc/nginx/sites-enabled/todo-app"
     state: link
   notify: Recharger Nginx
 

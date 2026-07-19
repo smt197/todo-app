@@ -6,7 +6,7 @@
 
 server {
     listen 80;
-    server_name {{ domain_name }};
+    server_name {{ domain_name | default('_', true) }};
 
     # Sécurité - Headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -44,6 +44,6 @@ server {
     }
 
     # Logs
-    access_log /var/log/nginx/{{ domain_name }}_access.log;
-    error_log  /var/log/nginx/{{ domain_name }}_error.log;
+    access_log /var/log/nginx/{{ domain_name | default('todo-app', true) }}_access.log;
+    error_log  /var/log/nginx/{{ domain_name | default('todo-app', true) }}_error.log;
 }
