@@ -44,13 +44,23 @@ jobs:
       - name: Détecter les fichiers modifiés
         id: changes
         run: |
-          # Comparer avec le commit précédent
-          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all")
-          
-          if [ "$CHANGED_FILES" = "all" ]; then
+          # Vérifier s'il y a un commit parent
+          if ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+            echo "First commit in repository, building everything..."
+            echo "frontend=true" >> $GITHUB_OUTPUT
+            echo "backend=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+
+          # Si un fichier de config global/CI/Ansible/Terraform a changé, on reconstruit et redéploie tout
+          if echo "$CHANGED_FILES" | grep -qE "^(\.github/|ansible/|terraform/|docker-compose\.yml|nginx/|\.gitignore)"; then
+            echo "Global config or workflow changed, building everything..."
             echo "frontend=true" >> $GITHUB_OUTPUT
             echo "backend=true" >> $GITHUB_OUTPUT
           else
+            # Sinon, détection ciblée par dossier
             if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
               echo "frontend=true" >> $GITHUB_OUTPUT
             else
