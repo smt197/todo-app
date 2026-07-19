@@ -1,0 +1,67 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# Production
+dist/
+build/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.tar
+*.tar.gz
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Database
+*.sql
+*.sqlite
+*.db
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl
+terraform.rc
+terraform.log
+
+# Private keys / SSH Keys (CRITICAL)
+my-ec2-key
+my-ec2-key.pub
+deploy_key
+*.pem
+*.key
+
+# Ansible
+*.retry
+*.vault_pass
