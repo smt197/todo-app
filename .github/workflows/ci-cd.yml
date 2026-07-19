@@ -26,7 +26,6 @@ env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
 jobs:
-
   # ═══════════════════════════════════════════════════════════
   # JOB 1 : Détection des changements
   # ═══════════════════════════════════════════════════════════
@@ -173,7 +172,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          
+
           # Configurer le ProxyJump pour accéder aux instances privées via le Front
           cat >> ~/.ssh/config << EOF
           Host front
@@ -181,14 +180,14 @@ jobs:
             User ubuntu
             IdentityFile ~/.ssh/deploy_key
             StrictHostKeyChecking no
-          
+
           Host back
             HostName ${{ secrets.BACK_IP }}
             User ubuntu
             IdentityFile ~/.ssh/deploy_key
             ProxyJump front
             StrictHostKeyChecking no
-          
+
           Host db
             HostName ${{ secrets.DB_IP }}
             User ubuntu
@@ -265,10 +264,10 @@ jobs:
               -o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} \
               -i ~/.ssh/deploy_key \
               ubuntu@${{ secrets.BACK_IP }} << 'SCRIPT'
-          
+
           # Récupérer l'image précédente (tag SHA du commit précédent)
           PREVIOUS_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "todo-api" | grep -v "latest" | head -1)
-          
+
           if [ -n "$PREVIOUS_IMAGE" ]; then
             echo "🔄 Rollback du Backend vers $PREVIOUS_IMAGE"
             docker stop todo-api 2>/dev/null || true
@@ -293,9 +292,9 @@ jobs:
           ssh -o StrictHostKeyChecking=no \
               -i ~/.ssh/deploy_key \
               ubuntu@${{ secrets.FRONT_IP }} << 'SCRIPT'
-          
+
           PREVIOUS_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "todo-front" | grep -v "latest" | head -1)
-          
+
           if [ -n "$PREVIOUS_IMAGE" ]; then
             echo "🔄 Rollback du Frontend vers $PREVIOUS_IMAGE"
             docker stop todo-front 2>/dev/null || true
