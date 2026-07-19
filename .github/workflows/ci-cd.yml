@@ -1,0 +1,304 @@
+# ─────────────────────────────────────────────────────────────
+# CI/CD Pipeline — MediShop Todo App
+# Build, Push, et Déploiement automatisé sur AWS
+#
+# Secrets GitHub requis :
+#   DOCKER_USERNAME    — Nom d'utilisateur Docker Hub
+#   DOCKER_PASSWORD    — Mot de passe / token Docker Hub
+#   SSH_PRIVATE_KEY    — Clé SSH privée pour accéder aux instances
+#   FRONT_IP           — IP publique de l'instance Front
+#   BACK_IP            — IP privée de l'instance Back
+#   DB_IP              — IP privée de l'instance DB
+#   DB_USER            — Utilisateur PostgreSQL
+#   DB_PASSWORD        — Mot de passe PostgreSQL
+#   DB_NAME            — Nom de la base de données
+#   DOMAIN_NAME        — Nom de domaine
+#   CERTBOT_EMAIL      — Email pour Let's Encrypt
+# ─────────────────────────────────────────────────────────────
+
+name: CI/CD - Build, Push & Deploy
+
+on:
+  push:
+    branches: ["main"]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+jobs:
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 1 : Détection des changements
+  # ═══════════════════════════════════════════════════════════
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend_changed: ${{ steps.changes.outputs.frontend }}
+      backend_changed: ${{ steps.changes.outputs.backend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Détecter les fichiers modifiés
+        id: changes
+        run: |
+          # Comparer avec le commit précédent
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "all")
+          
+          if [ "$CHANGED_FILES" = "all" ]; then
+            echo "frontend=true" >> $GITHUB_OUTPUT
+            echo "backend=true" >> $GITHUB_OUTPUT
+          else
+            if echo "$CHANGED_FILES" | grep -q "^frontend/"; then
+              echo "frontend=true" >> $GITHUB_OUTPUT
+            else
+              echo "frontend=false" >> $GITHUB_OUTPUT
+            fi
+            
+            if echo "$CHANGED_FILES" | grep -q "^backend/"; then
+              echo "backend=true" >> $GITHUB_OUTPUT
+            else
+              echo "backend=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 2 : Build et Push de l'image Backend
+  # ═══════════════════════════════════════════════════════════
+  build-backend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build et Push — Backend API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/todo-api:latest
+            ${{ secrets.DOCKER_USERNAME }}/todo-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          provenance: false
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 3 : Build et Push de l'image Frontend
+  # ═══════════════════════════════════════════════════════════
+  build-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build et Push — Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/todo-front:latest
+            ${{ secrets.DOCKER_USERNAME }}/todo-front:${{ github.sha }}
+          build-args: |
+            VITE_API_URL=/api
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+          provenance: false
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 4 : Déploiement via Ansible
+  # ═══════════════════════════════════════════════════════════
+  deploy:
+    needs: [detect-changes, build-backend, build-frontend]
+    if: |
+      always() &&
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
+      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
+      !(needs.build-backend.result == 'skipped' && needs.build-frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installer Ansible
+        run: pip install ansible
+
+      - name: Configurer la clé SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          # Configurer le ProxyJump pour accéder aux instances privées via le Front
+          cat >> ~/.ssh/config << EOF
+          Host front
+            HostName ${{ secrets.FRONT_IP }}
+            User ubuntu
+            IdentityFile ~/.ssh/deploy_key
+            StrictHostKeyChecking no
+          
+          Host back
+            HostName ${{ secrets.BACK_IP }}
+            User ubuntu
+            IdentityFile ~/.ssh/deploy_key
+            ProxyJump front
+            StrictHostKeyChecking no
+          
+          Host db
+            HostName ${{ secrets.DB_IP }}
+            User ubuntu
+            IdentityFile ~/.ssh/deploy_key
+            ProxyJump front
+            StrictHostKeyChecking no
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Générer l'inventaire Ansible dynamique
+        run: |
+          mkdir -p ansible/inventory
+          cat > ansible/inventory/hosts.ini << EOF
+          [front]
+          ${{ secrets.FRONT_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key
+
+          [back]
+          ${{ secrets.BACK_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} -o StrictHostKeyChecking=no'
+
+          [db]
+          ${{ secrets.DB_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} -o StrictHostKeyChecking=no'
+
+          [all:vars]
+          ansible_python_interpreter=/usr/bin/python3
+          EOF
+
+      - name: Déployer avec Ansible
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "false"
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DOMAIN_NAME: ${{ secrets.DOMAIN_NAME }}
+          CERTBOT_EMAIL: ${{ secrets.CERTBOT_EMAIL }}
+        run: |
+          ansible-playbook \
+            -i ansible/inventory/hosts.ini \
+            ansible/playbook.yml \
+            -v
+
+      - name: Nettoyage des clés SSH
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+          rm -f ~/.ssh/config
+
+      - name: Vérification du déploiement
+        run: |
+          echo "🚀 Déploiement terminé !"
+          echo "📍 Front : http://${{ secrets.FRONT_IP }}"
+          echo "📍 Domaine : https://${{ secrets.DOMAIN_NAME }}"
+
+  # ═══════════════════════════════════════════════════════════
+  # JOB 5 : Rollback en cas d'échec
+  # ═══════════════════════════════════════════════════════════
+  rollback:
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurer la clé SSH pour rollback
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Rollback du Backend
+        if: always()
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} \
+              -i ~/.ssh/deploy_key \
+              ubuntu@${{ secrets.BACK_IP }} << 'SCRIPT'
+          
+          # Récupérer l'image précédente (tag SHA du commit précédent)
+          PREVIOUS_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "todo-api" | grep -v "latest" | head -1)
+          
+          if [ -n "$PREVIOUS_IMAGE" ]; then
+            echo "🔄 Rollback du Backend vers $PREVIOUS_IMAGE"
+            docker stop todo-api 2>/dev/null || true
+            docker rm todo-api 2>/dev/null || true
+            docker run -d --name todo-api \
+              --restart always \
+              -p 5000:5000 \
+              -e DB_HOST=${{ secrets.DB_IP }} \
+              -e DB_PORT=5432 \
+              -e DB_USER=${{ secrets.DB_USER }} \
+              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
+              -e DB_NAME=${{ secrets.DB_NAME }} \
+              "$PREVIOUS_IMAGE"
+          else
+            echo "⚠️ Aucune image précédente disponible pour le rollback"
+          fi
+          SCRIPT
+
+      - name: Rollback du Frontend
+        if: always()
+        run: |
+          ssh -o StrictHostKeyChecking=no \
+              -i ~/.ssh/deploy_key \
+              ubuntu@${{ secrets.FRONT_IP }} << 'SCRIPT'
+          
+          PREVIOUS_IMAGE=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "todo-front" | grep -v "latest" | head -1)
+          
+          if [ -n "$PREVIOUS_IMAGE" ]; then
+            echo "🔄 Rollback du Frontend vers $PREVIOUS_IMAGE"
+            docker stop todo-front 2>/dev/null || true
+            docker rm todo-front 2>/dev/null || true
+            docker run -d --name todo-front \
+              --restart always \
+              -p 3000:80 \
+              "$PREVIOUS_IMAGE"
+          else
+            echo "⚠️ Aucune image précédente disponible pour le rollback"
+          fi
+          SCRIPT
+
+      - name: Nettoyage
+        if: always()
+        run: rm -f ~/.ssh/deploy_key

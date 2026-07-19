@@ -1,0 +1,39 @@
+# ─────────────────────────────────────────────────────────────
+# Role DB — Déploiement de PostgreSQL en conteneur Docker
+# ─────────────────────────────────────────────────────────────
+
+---
+- name: Créer le répertoire pour les données PostgreSQL
+  file:
+    path: /opt/postgres/data
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: "0755"
+
+- name: Arrêter et supprimer le conteneur PostgreSQL existant (si présent)
+  docker_container:
+    name: postgres-db
+    state: absent
+  ignore_errors: yes
+
+- name: Lancer le conteneur PostgreSQL
+  docker_container:
+    name: postgres-db
+    image: "postgres:16-alpine"
+    state: started
+    restart_policy: always
+    published_ports:
+      - "5432:5432"
+    env:
+      POSTGRES_USER: "{{ db_user }}"
+      POSTGRES_PASSWORD: "{{ db_password }}"
+      POSTGRES_DB: "{{ db_name }}"
+    volumes:
+      - "/opt/postgres/data:/var/lib/postgresql/data"
+
+- name: Attendre que PostgreSQL soit prêt
+  wait_for:
+    port: 5432
+    delay: 5
+    timeout: 60

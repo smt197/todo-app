@@ -1,0 +1,59 @@
+# ─────────────────────────────────────────────────────────────
+# Playbook principal — Provisioning de toutes les instances
+# Ce playbook est idempotent (ré-exécutable sans casser l'existant)
+# ─────────────────────────────────────────────────────────────
+
+---
+# ═══════════════════════════════════════════════════════════════
+# 1. Configuration commune à toutes les instances (Docker)
+# ═══════════════════════════════════════════════════════════════
+- name: Configuration commune - Installation de Docker
+  hosts: all
+  become: true
+  roles:
+    - common
+
+# ═══════════════════════════════════════════════════════════════
+# 2. Configuration de la couche DB (PostgreSQL en conteneur)
+# ═══════════════════════════════════════════════════════════════
+- name: Configuration de la couche DB
+  hosts: db
+  become: true
+  vars:
+    db_user: "{{ lookup('env', 'DB_USER') | default('postgres', true) }}"
+    db_password: "{{ lookup('env', 'DB_PASSWORD') | default('changeme', true) }}"
+    db_name: "{{ lookup('env', 'DB_NAME') | default('tododb', true) }}"
+  roles:
+    - db
+
+# ═══════════════════════════════════════════════════════════════
+# 3. Configuration de la couche Back (API en conteneur)
+# ═══════════════════════════════════════════════════════════════
+- name: Configuration de la couche Back
+  hosts: back
+  become: true
+  vars:
+    docker_username: "{{ lookup('env', 'DOCKER_USERNAME') | default('your_docker_user', true) }}"
+    db_host: "{{ hostvars[groups['db'][0]]['ansible_host'] | default(groups['db'][0]) }}"
+    db_port: "5432"
+    db_user: "{{ lookup('env', 'DB_USER') | default('postgres', true) }}"
+    db_password: "{{ lookup('env', 'DB_PASSWORD') | default('changeme', true) }}"
+    db_name: "{{ lookup('env', 'DB_NAME') | default('tododb', true) }}"
+    api_port: "5000"
+  roles:
+    - back
+
+# ═══════════════════════════════════════════════════════════════
+# 4. Configuration de la couche Front (Nginx + App Front en conteneurs)
+# ═══════════════════════════════════════════════════════════════
+- name: Configuration de la couche Front
+  hosts: front
+  become: true
+  vars:
+    docker_username: "{{ lookup('env', 'DOCKER_USERNAME') | default('your_docker_user', true) }}"
+    domain_name: "{{ lookup('env', 'DOMAIN_NAME') | default('localhost', true) }}"
+    back_private_ip: "{{ hostvars[groups['back'][0]]['ansible_host'] | default(groups['back'][0]) }}"
+    api_port: "5000"
+    certbot_email: "{{ lookup('env', 'CERTBOT_EMAIL') | default('admin@example.com', true) }}"
+  roles:
+    - front

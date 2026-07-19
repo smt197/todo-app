@@ -1,0 +1,105 @@
+# ─────────────────────────────────────────────────────────────
+# Role Front — Nginx reverse proxy + Application Front en conteneurs
+# ─────────────────────────────────────────────────────────────
+
+---
+- name: Installer Nginx
+  apt:
+    name: nginx
+    state: present
+
+- name: Installer Certbot et le plugin Nginx
+  apt:
+    name:
+      - certbot
+      - python3-certbot-nginx
+    state: present
+
+- name: Créer le répertoire pour les configs Nginx
+  file:
+    path: /etc/nginx/sites-available
+    state: directory
+
+- name: Copier la configuration Nginx du domaine
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx/sites-available/{{ domain_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Recharger Nginx
+
+- name: Activer le site Nginx (symlink)
+  file:
+    src: "/etc/nginx/sites-available/{{ domain_name }}"
+    dest: "/etc/nginx/sites-enabled/{{ domain_name }}"
+    state: link
+  notify: Recharger Nginx
+
+- name: Supprimer le site par défaut Nginx
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Recharger Nginx
+
+- name: Tester la configuration Nginx
+  command: nginx -t
+  register: nginx_test
+  changed_when: false
+
+- name: Démarrer et activer Nginx
+  systemd:
+    name: nginx
+    state: started
+    enabled: yes
+
+- name: Se connecter à Docker Hub
+  docker_login:
+    username: "{{ docker_username }}"
+    password: "{{ lookup('env', 'DOCKER_PASSWORD') | default('', true) }}"
+  when: lookup('env', 'DOCKER_PASSWORD') | default('', true) != ''
+  ignore_errors: yes
+
+- name: Tirer la dernière image du Front
+  docker_image:
+    name: "{{ docker_username }}/todo-front"
+    tag: latest
+    source: pull
+    force_source: yes
+
+- name: Arrêter et supprimer le conteneur Front existant (si présent)
+  docker_container:
+    name: todo-front
+    state: absent
+  ignore_errors: yes
+
+- name: Lancer le conteneur Front
+  docker_container:
+    name: todo-front
+    image: "{{ docker_username }}/todo-front:latest"
+    state: started
+    restart_policy: always
+    published_ports:
+      - "3000:80"
+
+- name: Attendre que le Front soit prêt
+  wait_for:
+    port: 3000
+    delay: 5
+    timeout: 60
+
+# Optionnel : Let's Encrypt (uniquement si un domaine est configuré)
+- name: Obtenir le certificat SSL avec Certbot
+  command: >
+    certbot --nginx -d {{ domain_name }}
+    --non-interactive --agree-tos
+    -m {{ certbot_email }}
+    --redirect
+  when: domain_name != "localhost" and domain_name != ""
+  ignore_errors: yes
+  register: certbot_result
+
+- name: Afficher le résultat Certbot
+  debug:
+    msg: "Certbot : {{ certbot_result.stdout | default('Skipped') }}"
+  when: certbot_result is defined

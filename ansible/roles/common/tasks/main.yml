@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────
+# Role common — Installation de Docker sur toutes les instances
+# Idempotent : chaque tâche utilise des modules Ansible déclaratifs
+# ─────────────────────────────────────────────────────────────
+
+---
+- name: Mettre à jour le cache APT
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Installer les paquets pré-requis
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - python3-pip
+      - software-properties-common
+    state: present
+
+- name: Ajouter la clé GPG Docker officielle
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Ajouter le dépôt Docker APT
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+
+- name: Installer Docker Engine et Docker Compose plugin
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Démarrer et activer le service Docker
+  systemd:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Ajouter l'utilisateur ubuntu au groupe docker
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+
+- name: Vérifier que Docker fonctionne
+  command: docker --version
+  register: docker_version
+  changed_when: false
+
+- name: Afficher la version de Docker
+  debug:
+    msg: "Docker installé : {{ docker_version.stdout }}"

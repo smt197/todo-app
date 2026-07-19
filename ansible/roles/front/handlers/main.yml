@@ -1,0 +1,6 @@
+# Handlers pour le rôle Front
+---
+- name: Recharger Nginx
+  systemd:
+    name: nginx
+    state: reloaded

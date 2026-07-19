@@ -1,0 +1,20 @@
+# ─────────────────────────────────────────────────────────────
+# Valeurs par défaut — À adapter selon votre environnement
+# ─────────────────────────────────────────────────────────────
+
+aws_region          = "us-east-1"
+availability_zone   = "us-east-1a"
+instance_type       = "t3.micro"
+ami_id              = "ami-05cf1e9f73fbad2e2"
+project_name        = "medishop-todo"
+
+# IMPORTANT : Remplacez par votre IP publique (obtenir via : curl ifconfig.me)
+admin_ip            = "YOUR_IP/32"
+
+# Remplacez par votre nom d'utilisateur Docker Hub
+docker_username     = "YOUR_DOCKER_USERNAME"
+
+# Remplacez par un mot de passe sécurisé
+db_password         = "CHANGE_ME_STRONG_PASSWORD"
+db_user             = "postgres"
+db_name             = "tododb"
