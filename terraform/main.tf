@@ -143,13 +143,14 @@ resource "aws_security_group" "front_sg" {
   description = "Security group for Front instance reverse proxy Nginx"
   vpc_id      = aws_vpc.main.id
 
-  # SSH depuis l'IP de l'administrateur uniquement
+  # SSH — ouvert pour EC2 Instance Connect et GitHub Actions
+  # La sécurité repose sur la key pair SSH (pas sur le filtrage IP)
   ingress {
-    description = "SSH from admin ip"
+    description = "SSH access"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.admin_ip]
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   # HTTP depuis Internet

@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────
 # CI/CD Pipeline — MediShop Todo App
 # Build, Push, et Déploiement automatisé sur AWS
-#
+
 # Secrets GitHub requis :
 #   DOCKER_USERNAME    — Nom d'utilisateur Docker Hub
 #   DOCKER_PASSWORD    — Mot de passe / token Docker Hub
