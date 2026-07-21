@@ -75,7 +75,7 @@ function App() {
 
   return (
     <div className="app">
-      <h1>📝 Todo List</h1>
+      <h1>📝 Todo Lists</h1>
       
       <div className="container">
         <TodoForm onAdd={addTodo} />
