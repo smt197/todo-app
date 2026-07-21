@@ -188,51 +188,43 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
 
-          # Configurer le ProxyJump pour accéder aux instances privées via le Front
-          cat > ~/.ssh/config << EOF
+          # SSH config global (désactiver la vérification des clés hôte)
+          cat > ~/.ssh/config << 'SSHEOF'
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
-
-          Host front
-            HostName ${{ secrets.FRONT_IP }}
-            User ubuntu
-            IdentityFile ~/.ssh/deploy_key
-
-          Host back
-            HostName ${{ secrets.BACK_IP }}
-            User ubuntu
-            IdentityFile ~/.ssh/deploy_key
-            ProxyJump front
-
-          Host db
-            HostName ${{ secrets.DB_IP }}
-            User ubuntu
-            IdentityFile ~/.ssh/deploy_key
-            ProxyJump front
-          EOF
+            ServerAliveInterval 30
+            ServerAliveCountMax 5
+          SSHEOF
           chmod 600 ~/.ssh/config
 
       - name: Tester la connectivité SSH au Front
         run: |
           ssh -o ConnectTimeout=10 -i ~/.ssh/deploy_key ubuntu@${{ secrets.FRONT_IP }} "echo '✅ Connexion SSH au Front OK'"
 
+      - name: Tester la connectivité SSH au Back (via bastion)
+        run: |
+          ssh -o ConnectTimeout=30 \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.FRONT_IP }}" \
+              -i ~/.ssh/deploy_key \
+              ubuntu@${{ secrets.BACK_IP }} "echo '✅ Connexion SSH au Back OK via bastion'"
+
       - name: Générer l'inventaire Ansible dynamique
         run: |
           mkdir -p ansible/inventory
-          cat > ansible/inventory/hosts.ini << EOF
+          cat > ansible/inventory/hosts.ini << INVEOF
           [front]
-          ${{ secrets.FRONT_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o StrictHostKeyChecking=no'
+          ${{ secrets.FRONT_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
 
           [back]
-          ${{ secrets.BACK_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+          ${{ secrets.BACK_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.FRONT_IP }}"'
 
           [db]
-          ${{ secrets.DB_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+          ${{ secrets.DB_IP }} ansible_user=ubuntu ansible_ssh_private_key_file=~/.ssh/deploy_key ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.FRONT_IP }}"'
 
           [all:vars]
           ansible_python_interpreter=/usr/bin/python3
-          EOF
+          INVEOF
 
       - name: Déployer avec Ansible
         env:
@@ -281,7 +273,7 @@ jobs:
         if: always()
         run: |
           ssh -o StrictHostKeyChecking=no \
-              -o ProxyJump=ubuntu@${{ secrets.FRONT_IP }} \
+              -o ProxyCommand="ssh -W %h:%p -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ubuntu@${{ secrets.FRONT_IP }}" \
               -i ~/.ssh/deploy_key \
               ubuntu@${{ secrets.BACK_IP }} << 'SCRIPT'
 
@@ -295,11 +287,6 @@ jobs:
             docker run -d --name todo-api \
               --restart always \
               -p 5000:5000 \
-              -e DB_HOST=${{ secrets.DB_IP }} \
-              -e DB_PORT=5432 \
-              -e DB_USER=${{ secrets.DB_USER }} \
-              -e DB_PASSWORD=${{ secrets.DB_PASSWORD }} \
-              -e DB_NAME=${{ secrets.DB_NAME }} \
               "$PREVIOUS_IMAGE"
           else
             echo "⚠️ Aucune image précédente disponible pour le rollback"

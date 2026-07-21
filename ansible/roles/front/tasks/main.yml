@@ -88,18 +88,21 @@
     delay: 5
     timeout: 60
 
-# Optionnel : Let's Encrypt (uniquement si un domaine est configuré)
+# Optionnel : Let's Encrypt (uniquement si un nom de domaine valide est configuré)
 - name: Obtenir le certificat SSL avec Certbot
   command: >
     certbot --nginx -d {{ domain_name }}
     --non-interactive --agree-tos
     -m {{ certbot_email }}
     --redirect
-  when: domain_name != "localhost" and domain_name != ""
-  ignore_errors: yes
+  when: >
+    domain_name != "localhost" and
+    domain_name != "" and
+    not (domain_name | regex_search('^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+$'))
+  failed_when: false
   register: certbot_result
 
 - name: Afficher le résultat Certbot
   debug:
-    msg: "Certbot : {{ certbot_result.stdout | default('Skipped') }}"
+    msg: "Certbot : {{ certbot_result.stdout | default('Skipped / Ignored') }}"
   when: certbot_result is defined
