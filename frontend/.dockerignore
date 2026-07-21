@@ -1,10 +1,72 @@
+# ─────────────────────────────────────────────────────────────
+# .dockerignore — Frontend
+# Exclut les fichiers inutiles du contexte Docker
+# pour accélérer le build et réduire la taille de l'image
+# ─────────────────────────────────────────────────────────────
+
+# Dependencies (seront réinstallées dans le conteneur)
 node_modules
-.env
+
+# Git & GitHub
 .git
+.gitignore
+.gitattributes
 .github
-npm-debug.log
-README.md
-docker-compose.yml
+
+# Docker files (éviter la récursion)
 Dockerfile
 .dockerignore
-/tmp
+docker-compose*.yml
+
+# Environment (les vars sont passées en build-args)
+.env
+.env.*
+
+# Documentation
+README.md
+LICENSE
+CHANGELOG.md
+docs/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output (sera regénéré dans le conteneur)
+dist/
+build/
+
+# Tests
+__tests__/
+test/
+tests/
+*.test.js
+*.test.jsx
+*.spec.js
+*.spec.jsx
+coverage/
+.nyc_output/
+
+# Fichiers lourds / temporaires
+*.tar
+*.tar.gz
+*.zip
+*.rar
+tmp/
+temp/
+
+# ESLint config (pas besoin en prod)
+eslint.config.js
+.eslintrc*
+.prettierrc*

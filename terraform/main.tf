@@ -140,12 +140,12 @@ resource "aws_route_table_association" "private" {
 # Internet → Front (HTTP/HTTPS) + Admin SSH
 resource "aws_security_group" "front_sg" {
   name        = "${var.project_name}-front-sg"
-  description = "Security group pour l'instance Front (reverse proxy Nginx)"
+  description = "Security group for Front instance reverse proxy Nginx"
   vpc_id      = aws_vpc.main.id
 
   # SSH depuis l'IP de l'administrateur uniquement
   ingress {
-    description = "SSH depuis l'admin"
+    description = "SSH from admin ip"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
@@ -189,12 +189,12 @@ resource "aws_security_group" "front_sg" {
 # Front → Back (port 5000, API) + SSH depuis Front uniquement (pour déploiement)
 resource "aws_security_group" "back_sg" {
   name        = "${var.project_name}-back-sg"
-  description = "Security group pour l'instance Back (API)"
+  description = "Security group for Back instance API"
   vpc_id      = aws_vpc.main.id
 
   # API depuis le Front uniquement (port 5000)
   ingress {
-    description     = "API depuis le Front"
+    description     = "API from Front"
     from_port       = 5000
     to_port         = 5000
     protocol        = "tcp"
@@ -229,12 +229,12 @@ resource "aws_security_group" "back_sg" {
 # Back → DB (port 5432, PostgreSQL) + SSH depuis Front (bastion)
 resource "aws_security_group" "db_sg" {
   name        = "${var.project_name}-db-sg"
-  description = "Security group pour l'instance DB (PostgreSQL)"
+  description = "Security group for DB instance PostgreSQL"
   vpc_id      = aws_vpc.main.id
 
   # PostgreSQL depuis le Back uniquement (port 5432)
   ingress {
-    description     = "PostgreSQL depuis le Back"
+    description     = "PostgreSQL from Back"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"

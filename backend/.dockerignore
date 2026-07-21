@@ -1,10 +1,61 @@
+# ─────────────────────────────────────────────────────────────
+# .dockerignore — Backend
+# Exclut les fichiers inutiles du contexte Docker
+# pour accélérer le build et réduire la taille de l'image
+# ─────────────────────────────────────────────────────────────
+
+# Dependencies (seront réinstallées dans le conteneur)
 node_modules
-.env
+
+# Git & GitHub
 .git
+.gitignore
+.gitattributes
 .github
-npm-debug.log
-README.md
-docker-compose.yml
+
+# Docker files (éviter la récursion)
 Dockerfile
 .dockerignore
-/tmp
+docker-compose*.yml
+
+# Environment (les vars d'env sont passées au runtime)
+.env
+.env.*
+
+# Documentation
+README.md
+LICENSE
+CHANGELOG.md
+docs/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests (pas nécessaires en production)
+__tests__/
+test/
+tests/
+*.test.js
+*.spec.js
+coverage/
+.nyc_output/
+
+# Fichiers lourds / temporaires
+*.tar
+*.tar.gz
+*.zip
+*.rar
+tmp/
+temp/
